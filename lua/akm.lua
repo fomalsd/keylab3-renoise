@@ -45,10 +45,9 @@ song=nil
 
 
 --variables
-local AKM_DEVICE_NAME={" KeyLab 49 mk3 (DAW)"," KeyLab 61 mk3 (DAW)"," KeyLab 88 mk3 (DAW)"," KeyLab Essential 49 mk3 (DAW)"," KeyLab Essential 61 mk3 (DAW)"," KeyLab Essential 88 mk3 (DAW)"}
+local AKM_MATCHES={"keylab 49 mk3","keylab 61 mk3","keylab 88 mk3","keylab essential 49 mk3","keylab essential 61 mk3","keylab essential 88 mk3"}
 local AKM_INPUTS={}
 local AKM_OUTPUTS={}
-local AKM_LOCK_IO_DEVICES=false
 local AKM_ACTIVATE=false
 local AKM_STOP_STATUS=false
 local AKM_TRK_REPEAT={70,300,true,true}
@@ -71,7 +70,7 @@ local AKM_CLR={
   MARKER={235,235,235},
   RED={199,000,000}
 }
-  
+
 --capture the native color of marker(for Windows: C:\Users\USER_NAME\AppData\Roaming\Renoise\V3.1.1\Config.xml)
 local function akm_capture_clr_mrk()
   --print(os.currentdir())
@@ -2526,230 +2525,85 @@ local function akm_input_midi(in_device_name)
 end
 
 
-local function akm_check_midi_on()
-  --AKM_INPUTS=renoise.Midi.available_input_devices()
+local function akm_find_device(devices, match_index)
+  local base = AKM_MATCHES[match_index]
+  if not base then return false end
+  local low_base = string.lower(base)
+  for dev = 1, #devices do
+    local low = string.lower(devices[dev])
+    if string.find(low, low_base .. " %(daw%)", 1) or string.find(low, low_base .. " daw", 1) then
+      return dev, devices[dev]
+    end
+  end
+  return false
+end
+
+local function akm_detect_keylab()
+  for idx=1,#AKM_MATCHES do
+    local low_base = string.lower(AKM_MATCHES[idx])
+    for i=1,#AKM_INPUTS do
+      local low = string.lower(AKM_INPUTS[i])
+      if string.find(low, low_base .. " %(daw%)", 1) or string.find(low, low_base .. " daw", 1) then
+        vws.AKM_TXT_DEVICE_NAME.text = string.sub(AKM_INPUTS[i], 2)
+        return idx
+      end
+    end
+  end
+  for idx=1,#AKM_MATCHES do
+    local low_base = string.lower(AKM_MATCHES[idx])
+    for i=1,#AKM_OUTPUTS do
+      local low = string.lower(AKM_OUTPUTS[i])
+      if string.find(low, low_base .. " %(daw%)", 1) or string.find(low, low_base .. " daw", 1) then
+        vws.AKM_TXT_DEVICE_NAME.text = string.sub(AKM_OUTPUTS[i], 2)
+        return idx
+      end
+    end
+  end
+  vws.AKM_TXT_DEVICE_NAME.text = "No device detected"
+  return false
+end
+
+local function akm_scan_devices()
+  AKM_INPUTS = {}
+  AKM_OUTPUTS = {}
   for i=1,#renoise.Midi.available_input_devices() do
     AKM_INPUTS[i]=(" %s"):format(renoise.Midi.available_input_devices()[i])
-    print("available_input_devices:",renoise.Midi.available_input_devices()[i]);
   end
-  
-  
-  if not table.is_empty(AKM_INPUTS) then
-    vws.AKM_PP_DEVICE_IN.items=AKM_INPUTS
-  end
-  local function show_mess()
-    AKM_ON_OFF=true akm_on_off()
-    if (vws.AKM_PP_DEVICE_NAME.value==1) then
-      return rna:show_warning("AKM: The in device \"KeyLab 49 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab 49 mk3\" MIDI controller\nconnected correctly?")
-    end
-    if (vws.AKM_PP_DEVICE_NAME.value==2) then
-      return rna:show_warning("AKM: The in device \"KeyLab 61 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab 61 mk3\" MIDI controller\nconnected correctly?")
-    end
-    if (vws.AKM_PP_DEVICE_NAME.value==3) then
-      return rna:show_warning("AKM: The in device \"KeyLab 88 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab 88 mk3\" MIDI controller\nconnected correctly?")
-    end
-    if (vws.AKM_PP_DEVICE_NAME.value==4) then
-      return rna:show_warning("AKM: The in device \"KeyLab Essential 49 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab Essential 49 mk3\" MIDI controller\nconnected correctly?")
-    end
-    if (vws.AKM_PP_DEVICE_NAME.value==5) then
-      return rna:show_warning("AKM: The in device \"KeyLab Essential 61 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab Essential 61 mk3\" MIDI controller\nconnected correctly?")
-    end
-    if (vws.AKM_PP_DEVICE_NAME.value==6) then
-      return rna:show_warning("AKM: The in device \"KeyLab Essential 88 mk3 (DAW)\" is not conected!\n\n"
-                            .."Do you have the \"KeyLab Essential 88 mk3\" MIDI controller\nconnected correctly?")
-    end
-  end
-  
-  if (AKM_LOCK_IO_DEVICES) then
-    --selecte default number of in device
-    local in_device_name=AKM_INPUTS[vws.AKM_PP_DEVICE_IN.value]
-    print("AKM dev_in:",vws.AKM_PP_DEVICE_IN.value,in_device_name)
-    AKM_ACTIVATE=true
-    akm_input_midi(string.sub(in_device_name,2))
-  else
-    --autoselect number of in device
-    if table.is_empty(AKM_INPUTS) then
-      return show_mess()
-    else
-      local status=true
-      if (vws.AKM_PP_DEVICE_NAME.value==1) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab 49 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==2) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab 61 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            --print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==3) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab 88 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            --print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==4) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab Essential 49 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==5) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab Essential 61 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            --print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==6) then
-        for dev=1,#AKM_INPUTS do
-          if (AKM_INPUTS[dev]==" KeyLab Essential 88 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_IN.value=dev
-            local in_device_name=AKM_INPUTS[dev]
-            --print("AKM dev_in:",dev,in_device_name)
-            AKM_ACTIVATE=true
-            akm_input_midi(string.sub(in_device_name,2))
-            status=false
-            break
-          end
-        end
-      end
-      if (status) then
-        show_mess()
-      end
-    end
-  end
-  --- ---
-  --AKM_OUTPUTS=renoise.Midi.available_output_devices()
   for i=1,#renoise.Midi.available_output_devices() do
     AKM_OUTPUTS[i]=(" %s"):format(renoise.Midi.available_output_devices()[i])
   end
-  if not table.is_empty(AKM_OUTPUTS) then
-    vws.AKM_PP_DEVICE_OUT.items=AKM_OUTPUTS
+  akm_detect_keylab()
+end
+
+local function akm_check_midi_on()
+  akm_scan_devices()
+  local detected = akm_detect_keylab()
+  if not detected then
+    AKM_ON_OFF=true akm_on_off()
+    return rna:show_warning("AKM: No Arturia KeyLab mk3 device found!\n\n"
+                          .."Do you have the MIDI controller\nconnected correctly?")
   end
-  if (AKM_LOCK_IO_DEVICES) then
-    --selecte default number of out device
-    local out_device_name=AKM_OUTPUTS[vws.AKM_PP_DEVICE_OUT.value]
-    print("AKM dev_out:",vws.AKM_PP_DEVICE_OUT.value,out_device_name)
-    akm_output_midi(string.sub(out_device_name,2))
+  --connect in device
+  if table.is_empty(AKM_INPUTS) then
+    AKM_ON_OFF=true akm_on_off()
+    return rna:show_warning("AKM: No MIDI input devices found!")
   else
-    --autoselect number of out device
-    if table.is_empty(AKM_OUTPUTS) then
-      return show_mess()
+    local dev, dev_name = akm_find_device(AKM_INPUTS, detected)
+    if dev then
+      print("AKM dev_in:", dev, dev_name)
+      AKM_ACTIVATE = true
+      akm_input_midi(string.sub(dev_name, 2))
     else
-      if (vws.AKM_PP_DEVICE_NAME.value==1) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab 49 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==2) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab 61 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            --print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==3) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab 88 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            --print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==4) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab Essential 49 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==5) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab Essential 61 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            --print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
-      if (vws.AKM_PP_DEVICE_NAME.value==6) then
-        for dev=1,#AKM_OUTPUTS do
-          if (AKM_OUTPUTS[dev]==" KeyLab Essential 88 mk3 (DAW)") then
-            vws.AKM_PP_DEVICE_OUT.value=dev
-            local out_device_name=AKM_OUTPUTS[dev]
-            --print("AKM dev_out:",dev,out_device_name)
-            AKM_ACTIVATE=true
-            akm_output_midi(string.sub(out_device_name,2))
-            break
-          end
-        end
-      end
+      AKM_ON_OFF=true akm_on_off()
+      return rna:show_warning("AKM: Could not connect to MIDI input device!")
+    end
+  end
+  --connect out device
+  if not table.is_empty(AKM_OUTPUTS) then
+    local dev, dev_name = akm_find_device(AKM_OUTPUTS, detected)
+    if dev then
+      print("AKM dev_out:", dev, dev_name)
+      akm_output_midi(string.sub(dev_name, 2))
     end
   end
 end
@@ -3000,35 +2854,18 @@ function akm_on_off()
 end
 
 
-local function akm_lock_io_devices()
-  if (AKM_LOCK_IO_DEVICES) then
-    AKM_LOCK_IO_DEVICES=false
-    vws.AKM_BT_LOCK_IO_DEVICES.bitmap="ico/padlock_close_ico.png"
-    vws.AKM_BT_LOCK_IO_DEVICES.color=AKM_CLR.MARKER
-    vws.AKM_PP_DEVICE_IN.active=false
-    vws.AKM_PP_DEVICE_OUT.active=false
-  else
-    AKM_LOCK_IO_DEVICES=true
-    vws.AKM_BT_LOCK_IO_DEVICES.color=AKM_CLR.DEFAULT
-    vws.AKM_BT_LOCK_IO_DEVICES.bitmap="ico/padlock_open_ico.png"
-    vws.AKM_PP_DEVICE_IN.active=true
-    vws.AKM_PP_DEVICE_OUT.active=true
-  end
-end
 
 
 
 local AKM_SHOW_HIDE=true
 local function akm_show_hide()
   if (AKM_SHOW_HIDE) then
-    vws.AKM_ROW_TOP_1.visible=false
     vws.AKM_ROW_TOP_2.visible=false
     vws.AKM_MAIN_PANELS.visible=false
     vws.AKM_BT_SHOW_HIDE.bitmap="ico/compact_off_ico.png"
     vws.AKM_BT_SHOW_HIDE.color=AKM_CLR.MARKER
     AKM_SHOW_HIDE=false  
   else
-    vws.AKM_ROW_TOP_1.visible=true
     vws.AKM_ROW_TOP_2.visible=true
     vws.AKM_MAIN_PANELS.visible=true
     vws.AKM_BT_SHOW_HIDE.bitmap="ico/compact_on_ico.png"
@@ -3086,59 +2923,13 @@ local function akm_upper_panel()
       align="right",
       text="Name "
     },
-    vb:popup{
-      id="AKM_PP_DEVICE_NAME",
+    vb:textfield{
+      id="AKM_TXT_DEVICE_NAME",
       height=21,
       width=181,
-      value=1,
-      items=AKM_DEVICE_NAME,
-      notifier=function() if (AKM_ON_OFF) then return akm_check_midi_off(), akm_check_midi_on() end end,
-      tooltip="List of the names of supported devices."
-    },
-    vb:row{
-      id="AKM_ROW_TOP_1",
-      vb:text{
-        height=21,
-        width=71,
-        align="right",
-        text="In Device "
-      },
-      vb:popup{
-        id="AKM_PP_DEVICE_IN",
-        active=false,
-        height=21,
-        width=183,
-        value=1,
-        items=AKM_INPUTS,
-        notifier=function() if (AKM_ON_OFF) then return akm_check_midi_off(), akm_check_midi_on() end end,
-        tooltip="List of available in devices."
-      },
-      vb:text{
-        height=21,
-        width=81,
-        align="right",
-        text="Out Device "
-      },
-      vb:popup{
-        id="AKM_PP_DEVICE_OUT",
-        active=false,
-        height=21,
-        width=183,
-        value=1,
-        items=AKM_OUTPUTS,
-        notifier=function() if (AKM_ON_OFF) then return akm_check_midi_off(), akm_check_midi_on() end end,
-        tooltip="List of available out devices."
-      },
-      vb:button{
-        id="AKM_BT_LOCK_IO_DEVICES",
-        height=21,
-        width=37,
-        bitmap="ico/padlock_close_ico.png",
-        color=AKM_CLR.MARKER,
-        notifier=function() akm_lock_io_devices() end,
-        tooltip="Lock/unlock the selection of in/out devices.\nAlways use the \"KeyLab mk3 (DAW)\" in this window.\n"..
-                "Do not use the the \"KeyLab mk3 (DAW)\" in:\nReniose: Edit / Preferences / MIDI: \"In device X...\" & \"Out device...\"."
-      }
+      text="No device detected",
+      active=false,
+      tooltip="Detected Arturia KeyLab device."
     },
     vb:button{
       id="AKM_BT_SHOW_HIDE",
@@ -3775,9 +3566,10 @@ local INJECTED_MAPPINGS = [[
       </ActionMapping>
     </ActionMappings>]]
 
-local TMP_SAVE    = "/tmp/akm_save.xrns"
-local TMP_UNZIP   = "/tmp/akm_unzip"
-local TMP_PATCHED = "/tmp/akm_patched.xrns"
+local TMP_DIR      = os.getenv("TEMP") or os.getenv("TMP") or "/tmp"
+local TMP_SAVE    = TMP_DIR.."/akm_save.xrns"
+local TMP_UNZIP   = TMP_DIR.."/akm_unzip"
+local TMP_PATCHED = TMP_DIR.."/akm_patched.xrns"
 local INJECTED_MARKER = "AKM_INJECTED"
 
 local _app_ready = false
@@ -3939,6 +3731,7 @@ local function akm_main_dialog()
     akm_capture_clr_mrk()
     akm_main_content()
     require("lua/keyhandler")
+    akm_scan_devices()
   end
   --avoid showing the same window several times!
   if (AKM_MAIN_DIALOG) and (AKM_MAIN_DIALOG.visible) then AKM_MAIN_DIALOG:show() return end
